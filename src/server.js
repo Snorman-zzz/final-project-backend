@@ -49,7 +49,7 @@ app.get('/api/init-db', async (req, res) => {
     console.log('🚀 Starting database initialization via endpoint...');
     
     const { query } = await import('./database/connection.js');
-    const bcrypt = await import('bcryptjs');
+    const bcrypt = (await import('bcryptjs')).default;
     
     // Create Users table
     console.log('👥 Creating users table...');
