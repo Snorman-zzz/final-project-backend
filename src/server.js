@@ -8,8 +8,17 @@ import authRoutes from './routes/auth.js';
 import movieRoutes from './routes/movies.js';
 import reviewRoutes from './routes/reviews.js';
 import watchlistRoutes from './routes/watchlist.js';
+import { validateEnvironment, getEnvironmentInfo } from './utils/envValidation.js';
 
 dotenv.config();
+
+// Validate environment variables on startup
+try {
+  validateEnvironment();
+} catch (error) {
+  console.error('💥 Server startup failed due to environment issues');
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -56,9 +65,65 @@ app.use('/api/movies', movieRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/watchlist', watchlistRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+// Enhanced health check
+app.get('/api/health', async (req, res) => {
+  const healthCheck = {
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: getEnvironmentInfo()
+  };
+
+  try {
+    // Test database connection
+    const { pool } = await import('./database/connection.js');
+    const dbResult = await pool.query('SELECT NOW() as current_time');
+    healthCheck.database = {
+      status: 'connected',
+      currentTime: dbResult.rows[0].current_time
+    };
+
+    // Check if tables exist
+    const tablesResult = await pool.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name IN ('users', 'movies', 'reviews', 'watchlists')
+      ORDER BY table_name
+    `);
+    
+    const existingTables = tablesResult.rows.map(row => row.table_name);
+    const requiredTables = ['users', 'movies', 'reviews', 'watchlists'];
+    const missingTables = requiredTables.filter(table => !existingTables.includes(table));
+    
+    healthCheck.database.tables = {
+      existing: existingTables,
+      missing: missingTables,
+      initialized: missingTables.length === 0
+    };
+
+    if (missingTables.length > 0) {
+      healthCheck.status = 'WARNING';
+      healthCheck.warnings = [
+        `Database tables missing: ${missingTables.join(', ')}`,
+        'Run database initialization script to create missing tables'
+      ];
+    }
+
+  } catch (error) {
+    healthCheck.status = 'ERROR';
+    healthCheck.database = {
+      status: 'disconnected',
+      error: error.message
+    };
+  }
+
+  // Check external services
+  healthCheck.services = {
+    omdb: process.env.OMDB_API_KEY ? 'configured' : 'missing_api_key'
+  };
+
+  const statusCode = healthCheck.status === 'ERROR' ? 503 : 200;
+  res.status(statusCode).json(healthCheck);
 });
 
 // Error handling middleware

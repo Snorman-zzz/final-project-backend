@@ -3,12 +3,35 @@ import fetch from 'node-fetch';
 const API_KEY = process.env.OMDB_API_KEY;
 const BASE_URL = 'https://www.omdbapi.com/';
 
+// Check if API key is available
+const checkApiKey = () => {
+  if (!API_KEY) {
+    console.warn('⚠️  OMDB_API_KEY not configured. OMDB features will be limited.');
+    return false;
+  }
+  return true;
+};
+
 export class OMDBService {
   static async searchMovies(query, page = 1) {
     try {
+      if (!checkApiKey()) {
+        return {
+          Search: [],
+          totalResults: '0',
+          Response: 'False',
+          Error: 'OMDB API key not configured'
+        };
+      }
+
       const response = await fetch(
         `${BASE_URL}?apikey=${API_KEY}&s=${encodeURIComponent(query)}&page=${page}`
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       return {
@@ -18,34 +41,50 @@ export class OMDBService {
         Error: data.Error
       };
     } catch (error) {
-      console.error('OMDB search error:', error);
+      console.error('OMDB search error:', error.message);
       return {
         Search: [],
         totalResults: '0',
         Response: 'False',
-        Error: 'Failed to fetch from OMDB'
+        Error: `Failed to fetch from OMDB: ${error.message}`
       };
     }
   }
 
   static async getMovieById(id) {
     try {
+      if (!checkApiKey()) {
+        return {
+          Response: 'False',
+          Error: 'OMDB API key not configured'
+        };
+      }
+
       const response = await fetch(
         `${BASE_URL}?apikey=${API_KEY}&i=${id}&plot=full`
       );
-      const data = await response.json();
       
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
       return data;
     } catch (error) {
-      console.error('OMDB movie details error:', error);
+      console.error('OMDB movie details error:', error.message);
       return {
         Response: 'False',
-        Error: 'Failed to fetch movie details from OMDB'
+        Error: `Failed to fetch movie details from OMDB: ${error.message}`
       };
     }
   }
 
   static async getFeaturedMovies() {
+    if (!checkApiKey()) {
+      console.warn('OMDB API not available, returning empty featured movies list');
+      return [];
+    }
+
     const popularSearches = ['Batman', 'Marvel', 'Star Wars', 'Inception', 'Avatar', 'Titanic'];
     const results = [];
     
@@ -61,7 +100,7 @@ export class OMDBService {
           }
         }
       } catch (error) {
-        console.error(`Error fetching movies for ${search}:`, error);
+        console.error(`Error fetching movies for ${search}:`, error.message);
       }
     }
     
