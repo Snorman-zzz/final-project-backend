@@ -73,16 +73,8 @@ router.post('/login', loginValidation, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', {
-      message: error.message,
-      code: error.code,
-      detail: error.detail,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-    res.status(500).json({ 
-      error: 'Login failed',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 
